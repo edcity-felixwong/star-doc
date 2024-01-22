@@ -148,4 +148,8 @@ If we send an invalid payload, the fetch function above will throw, Such that we
 ### Caching
 STAR leverages `react-query` to cache the API results within the application. In contrast, we didn't implemented a network layer caching, which usually done with a service worker.
 
-STAR uses a *Stale-While-Revalidate* (SWR) strategy for data caching. By default, STAR only 
+STAR uses a *Stale-While-Revalidate* (SWR) strategy for data caching. By default, STAR only try to fetch when -
+1. A new component mounted
+2. Window is re-focused
+3. Netwrok is re-connect
+Otherwise, vue-query client will use the cached query for that fetch, this is called *deduping*.
