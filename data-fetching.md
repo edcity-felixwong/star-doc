@@ -1,10 +1,10 @@
-STAR leverages [`react-query`](https://tanstack.com/query/latest/docs/vue/overview) to handle data-fetching. Which provides many features on fetching, caching, CRUD operations support, stale-while-revalidate mechanism, race conditions handling, etc.
+# Data Fetching
 
-### Data Fetching
+STAR leverages [react-query](https://tanstack.com/query/latest/docs/vue/overview) to handle data-fetching. Which provides many features on fetching, caching, CRUD operations support, stale-while-revalidate mechanism, race conditions handling, etc.
 
-#### HTTP Client
+## HTTP Client
 
-STAR leverages `axios` as a client to send HTTP requests because of the needs of an abstraction layer for HTTP traffic. `axios` offers many features that we should consider when evaluating a HTTP client on both the server side and the client side.
+STAR leverages `axios` as a client to send HTTP requests because of the needs of an abstraction layer for HTTP traffic. There would be needs to abstract authentication, content-type, format, encoding, error handling and focus on the business logics. Sometime you may need multiple instances for end points and logic. `axios` offers many features that we should consider when evaluating a HTTP client on both the server side and the client side.
 
 1. _Tree-shakable_: `axios` can't be tree-shaken.
 2. _Size_: `axios` has a large size of `11KB` after minified and gziped.
@@ -58,7 +58,62 @@ import { $http } from "@/services/axios";
 ...
 ```
 
-#### Data fetching effect on components
+## HTTP Client Alternative
+
+There are alternatives for `axios`, and our evaluation for candidates are nothing new:
+
+1. Tree-shakable
+2. Small bundle size
+3. Available to interceptors
+4. With error handling
+5. Isomorphism
+6. Can create instances
+
+I found [ky](https://www.npmjs.com/package/ky) and [wretch](https://www.npmjs.com/package/wretch) are great candidates that both based on native `fetch` API, which means they are isomorphic and more stable with native API in general.
+
+### ky
+
+`ky` offers a nice retry functionality, it leverages native `FormData`, `URLSearchParams` and `AbortController`.
+
+```js
+const controller = new AbortController();
+const { signal } = controller;
+const res = ky(url, { signal }).text();
+```
+
+```js
+// `multipart/form-data`
+const formData = new FormData();
+formData.append("food", "fries");
+formData.append("drink", "icetea");
+
+const response = await ky.post(url, { body: formData });
+```
+
+```js
+// `application/x-www-form-urlencoded`
+const searchParams = new URLSearchParams();
+searchParams.set("food", "fries");
+searchParams.set("drink", "icetea");
+
+const response = await ky.post(url, { body: searchParams });
+```
+
+### Wretch
+
+`wreth` provides a nice chain API, which can help to narrow down error.
+
+```js
+wretch("anything")
+  .get()
+  .notFound(error => { /* ... */ })
+  .unauthorized(error => { /* ... */ })
+  .error(418, error => { /* ... */ })
+  .res(response => /* ... */)
+  .catch(error => { /* uncaught errors */ })
+```
+
+## Data fetching effect on components
 
 Say `https://petstore.swagger.io/v2/pet` is the API end point for our service. And we want to fetch it when our component mounted. Assume a `id` of pet is passed from `props`. We can do something like:
 
@@ -97,14 +152,15 @@ Our `@/services/api` literally copied the api endpoints. That means if you want 
     .
 ```
 
-#### Data models
-Module `@/servies/models` has all the models for API responses, errors and common data types. 
+### Data models
 
-#### Validation
+Module `@/services/models` has all the models for API responses, errors and common data types.
+
+### Validation
 
 As everything that across boundary should be validated. We should validate both the requests and responses in ideal. But honestly I didn't know how to validate the responses as they didn't seem to have a consistent schema under the hook. For now, we can only _type_ the API responses on typescript, and we can just validate our payload before sending it to the server.
 
-STAR leverages [`zod`](https://zod.dev/) for validation, for example, we have a API `POST` `https://petstore.swagger.io/v2/store/order` that can create an order for a pet. It takes a body payload like:
+STAR leverages [zod](https://zod.dev/) for validation, for example, we have a API `POST` `https://petstore.swagger.io/v2/store/order` that can create an order for a pet. It takes a body payload like:
 
 ```JSON
 {
@@ -141,15 +197,19 @@ const orderQuery = (payload: OrderPayload = {}) =>
     ...orderPayloadZ.parse(payload),
   });
 ```
+
 If we send an invalid payload, the fetch function above will throw, Such that we can validate our payload before we actually send out the request. Which will help us a lot on debugging 😇.
 
 > Notice that the `payload` have a default value of `{}`, which is useful for simple requests. `zod` will return the default for `.parse({})`. If you don't want to throw an error, or just want to deal with `undefined`, you can do `z.catch(() => "default-value")`, for example, `z.number().catch(() => 1)` will return `1` for `.parse(undefined)`.
 
 ### Caching
+
 STAR leverages `react-query` to cache the API results within the application. In contrast, we didn't implemented a network layer caching, which usually done with a service worker.
 
-STAR uses a *Stale-While-Revalidate* (SWR) strategy for data caching. By default, STAR only try to fetch when -
+STAR uses a _Stale-While-Revalidate_ (SWR) strategy for data caching. By default, STAR only try to fetch when -
+
 1. A new component mounted
 2. Window is re-focused
-3. Netwrok is re-connect
-Otherwise, vue-query client will use the cached query for that fetch, this is called *deduping*.
+3. Network is re-connect
+
+Otherwise, vue-query client will use the cached query for that fetch, this is called _deduping_.
